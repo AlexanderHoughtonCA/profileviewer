@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pv-webserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      component: pv-webserver
+  template:
+    metadata:
+      labels:
+        component: pv-webserver
+    spec:
+      nodeSelector:
+        role: worker
+      containers:
+        - name: pv-webserver
+          image: YOUR_DOCKER_REPO/profileviewer-app-webserver-k8s:latest
+          imagePullPolicy: Always
+          stdin: true
+          tty: true
+          env:
+            - name: APP_TYPE
+              value: "app"
+            - name: APP_URL
+              value: YOUR_SITE_URL
+          ports:
+            - name: pv-webserver
+              containerPort: 8931
+      imagePullSecrets:
+        - name: dregcred
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pv-webserver
+spec:
+  type: ClusterIP
+  selector:
+    component: pv-webserver
+  ports:
+  - name: pv-webserver
+    port: 8931
+    targetPort: 8931
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-pv-webserver
+  # annotations:
+  #   ingress.networking.k8s.io/client-max-body-size: "100m"
+  #   ingress-nginx/client-max-body-size: "100m"
+  #   nginx.org/client-max-body-size: "100m"
+spec:
+  rules:
+  - host: github.alexanderhoughton.com 
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: pv-webserver
+            port:
+              number: 8931
+  ingressClassName: nginx
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pvwebserverlb
+  annotations:
+    metallb.universe.tf/address-pool: lb-pool
+spec:
+  selector:
+    component: pv-webserver
+  ports:
+    - protocol: TCP
+      port: 8931       # The port MetalLB listens on (HTTP)
+      targetPort: 8931  # The port the Ingress controller listens on
+  type: LoadBalancer
+
